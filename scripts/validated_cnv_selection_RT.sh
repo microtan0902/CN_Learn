@@ -22,7 +22,7 @@ TARGET_PROBES='/home/rt2776/source/capture_kits/xgen_plus_spikein.b38.bed'
 REF_GENOME='/share/data/RGC_b38/genome.hg38rg.fa'
 
 ##############################################################################################
-# STEP 1: Annotate batch info for XHMM
+# STEP 1: XHMM
 ##############################################################################################
 # unique and resort !!!
 : sort u
@@ -84,9 +84,11 @@ head -1 ${input_file} | awk '{for (i=1;i<=NF;i++) {if ($i=="Offspring_SQ") {prin
 head -1 ${input_file} | awk '{for (i=1;i<=NF;i++) {if ($i=="Father_NQ") {print i}}}'
 head -1 ${input_file} | awk '{for (i=1;i<=NF;i++) {if ($i=="Mother_NQ") {print i}}}'
 
+Offspring_SQ=10
+Parent_NQ=60
 cat ${input_file} | grep -v "None" \
-    | awk -F '\t' '{if(($26=="Offspring_SQ"||$26>=10) && ($29=="Father_NQ"||$29>=60) \
-    &&($31=="Mother_NQ"||$31>=60)) print $0 }' \
+    | awk -F '\t' '{if(($26=="Offspring_SQ"||$26>='${Offspring_SQ}') && ($29=="Father_NQ"||$29>='${Parent_NQ}') \
+    &&($31=="Mother_NQ"||$31>='${Parent_NQ}')) print $0 }' \
     > ${data_path}xhmm_calls_offspring_denovo.cnv
 
 cat ${data_path}xhmm_calls_offspring_denovo.cnv|cut -f 1,2,3,26,28,29,30,31|less
@@ -241,7 +243,7 @@ cat ${input_file}|awk -F '\t' '{if(($34=="Mappability"||$34>=0.75) && ($35=="GC"
     > ${data_path}canoes_calls_offspring_trio_inherited_final.cnv 
 
 cat ${data_path}canoes_calls_offspring_trio_inherited_final.cnv|cut -f 4,3,2 > ${data_path}validation_canoes_inherited.txt
-cat ${data_path}validation_canoes_inherited.txt|awk -F "\t|-|:" '{print $3"\t"$4"\t"$5"\t"$2"\t"$5-$4+1"\t"$1"\tTrue"}' \
+cat ${data_path}validation_canoes_inherited.txt|awk -F "\t|-|:" '{print $3"\t"$4"\t"$5"\t"$2"\t"$5-$4+1"\t"$1"\tTrue\tCANOES"}' \
     >${data_path}validated_canoes_true_cnvs.txt
 
 ## Filter de novo CNVs
@@ -250,14 +252,14 @@ head -1 $input_file | awk '{for (i=1;i<=NF;i++) {if ($i=="SD_region") {print i}}
 head -1 $input_file | awk '{for (i=1;i<=NF;i++) {if ($i=="Mappability") {print i}}}'
 head -1 $input_file | awk '{for (i=1;i<=NF;i++) {if ($i=="GC") {print i}}}'
 
-cat ${input_file}|awk -F '\t' '{if(($33=="SD_region"||$33=="-") && ($34=="Mappability"||$34>=0.75) && ($35=="GC"||($35>=0.3&&$35<=0.7))) print $0}' \
+cat ${input_file}|awk -F '\t' '{if(($33=="SD_region"||wc$33=="-") && ($34=="Mappability"||$34>=0.75) && ($35=="GC"||($35>=0.3&&$35<=0.7))) print $0}' \
     > ${data_path}canoes_calls_offspring_trio_denovo_final.cnv 
 
 cat ${input_file}|awk -F '\t' '{if(($33=="SD_region"||$33!="-") || ($34=="Mappability"||$34<0.75) || ($35=="GC"||$35<0.3||$35>0.7)) print $0}' \
     > ${data_path}canoes_calls_offspring_trio_denovo_final_filtered.cnv 
 
 cat ${data_path}canoes_calls_offspring_trio_denovo_final.cnv|cut -f 4,3,2 > ${data_path}validation_canoes_denovo.txt
-cat ${data_path}validation_canoes_denovo.txt|awk -F "\t|-|:" '{print $3"\t"$4"\t"$5"\t"$2"\t"$5-$4+1"\t"$1"\tFalse"}' \
+cat ${data_path}validation_canoes_denovo.txt|awk -F "\t|-|:" '{print $3"\t"$4"\t"$5"\t"$2"\t"$5-$4+1"\t"$1"\tFalse\tCANOES"}' \
     >${data_path}validated_canoes_false_cnvs.txt
 
 
@@ -265,6 +267,7 @@ cat ${data_path}validation_canoes_denovo.txt|awk -F "\t|-|:" '{print $3"\t"$4"\t
 # STEP 2.3: CLAMMS CNVs 
 ##############################################################################################
 data_path='/home/rt2776/CN_Learn/gsd_data/clamms/'
+cd ${data_path}
 python /home/rt2776/cnv_analysis/scripts/5_annotation.py pedigree \
     --input ${data_path}clamms_calls.txt \
     --output ${data_path}clamms_calls_ped.txt \
@@ -281,11 +284,12 @@ cat ${data_path}clamms_calls_ped_EQabove0_tar3.txt |awk '{if($23=="Role"||$23=="
 cat ${data_path}clamms_calls_ped_EQabove0_tar3.txt |awk '{if($23=="Role"||$23=="Parent") print $0}'>${data_path}clamms_calls_parent.cnv
 
 ## Stratify de novo and inherited CNVs
+## output:/home/rt2776/CN_Learn/gsd_data/clamms/clamms_offspring_inheritance_w_SQ.cnv
 python /home/rt2776/cnv_analysis/scripts/clamms_denovo_inherited_cnv.py
 
 ## annotate SD, Mappability, GC
 python /home/rt2776/cnv_analysis/scripts/5_annotation.py sd \
-    --input ${data_path}clamms_offspring_inheritance.cnv \
+    --input ${data_path}clamms_offspring_inheritance_w_SQ.cnv \
     --output ${data_path}clamms_offspring_inheritance_sd.cnv
 
 python /home/rt2776/cnv_analysis/scripts/5_annotation.py mappability \
@@ -305,9 +309,23 @@ bedtools nuc -fi ${REF_GENOME} -bed ${cnv_gc_region} >${data_path}clamms_bedtool
 paste ${data_path}clamms_offspring_inheritance_sd_mapp_gc.cnv ....
 
 ## Filter by SD, Mappability and GC content
-cat ${data_path}clamms_offspring_inheritance_sd_mapp_gc.cnv |awk -F '\t' '{if($6=="SD_region" || $6=="-") print $0}' |\
-    awk '{if(($7=="Mappability"||$7>=0.75) && ($8=="GC"||($8>0.30&&$8<=0.70))) print$0}' \
+input_file=${data_path}clamms_offspring_inheritance_sd_mapp_gc.cnv
+head -1 $input_file | awk '{for (i=1;i<=NF;i++) {if ($i=="SD_region") {print i}}}'
+head -1 $input_file | awk '{for (i=1;i<=NF;i++) {if ($i=="Mappability") {print i}}}'
+head -1 $input_file | awk '{for (i=1;i<=NF;i++) {if ($i=="GC") {print i}}}'
+
+cat ${input_file} |awk -F '\t' '{if($7=="SD_region" || $7=="-") print $0}' |\
+    awk '{if(($8=="Mappability"||$8>=0.75) && ($9=="GC"||($9>0.30 && $9<=0.70))) print$0}' \
         > ${data_path}clamms_offspring_inheritance_sd_mapp_gc_filtered.cnv
+
+cut -f9 ${data_path}clamms_offspring_inheritance_sd_mapp_gc_filtered.cnv|sort|tail
+cut -f9 ${data_path}clamms_offspring_inheritance_sd_mapp_gc_filtered.cnv|sort|head
+
+cut -f8 ${data_path}clamms_offspring_inheritance_sd_mapp_gc_filtered.cnv|sort|tail
+cut -f8 ${data_path}clamms_offspring_inheritance_sd_mapp_gc_filtered.cnv|sort|head
+
+cut -f7 ${data_path}clamms_offspring_inheritance_sd_mapp_gc_filtered.cnv|sort|tail
+cut -f7 ${data_path}clamms_offspring_inheritance_sd_mapp_gc_filtered.cnv|sort|head
 
 ## Get de novo and inherited CNVs
 input_file=${data_path}clamms_offspring_inheritance_sd_mapp_gc_filtered.cnv
@@ -316,9 +334,25 @@ head -1 $input_file | awk '{for (i=1;i<=NF;i++) {if ($i=="inheritance") {print i
 cat $input_file |awk '{if($5=="inheritance"||$5=="Denovo") print $0}'>${data_path}clamms_offspring_denovo.cnv
 cat $input_file |awk '{if($5=="inheritance"||$5=="Inherited") print $0}'>${data_path}clamms_offspring_inherited.cnv
 
-cat ${data_path}clamms_offspring_denovo.cnv | awk -F "\t|-|:" '{print $3"\t"$4"\t"$5"\t"$2"\t"$5-$4"\t"$1"\tFalse\tCLAMMS"}' \
+## check the distribution of SQ and select suitable part of CNVs as True or False
+## 2020.06.14
+github cnv_toolkit/plot/hist_clamms_sq_distirbution.R
+
+q_threshold=80
+cat ${data_path}clamms_offspring_denovo.cnv|awk '{if($6=="Q_SOME"||$6<'${q_threshold}') print $0}' > ${data_path}clamms_offspring_denovo_sq80.cnv
+
+cat ${data_path}clamms_offspring_denovo_sq80.cnv|awk -F "\t|-|:" '{print $3"\t"$4"\t"$5"\t"$2"\t"$5-$4"\t"$1"\tFalse\tCLAMMS"}' \
     >${data_path}validated_clamms_false_cnvs.txt
 
 cat ${data_path}clamms_offspring_inherited.cnv | awk -F "\t|-|:" '{print $3"\t"$4"\t"$5"\t"$2"\t"$5-$4"\t"$1"\tTrue\tCLAMMS"}' \
     >${data_path}validated_clamms_true_cnvs.txt
 
+##############################################################################################
+# STEP 3: Combine results
+##############################################################################################
+data_path='/home/rt2776/CN_Learn/gsd_data/'
+cat ${data_path}xhmm/validated_xhmm_true_cnvs.txt ${data_path}canoes/validated_canoes_true_cnvs.txt \
+    ${data_path}clamms/validated_clamms_true_cnvs.txt > ${data_path}validated_xhmm_canoes_clamms_true_cnvs.txt
+
+cat ${data_path}xhmm/validated_xhmm_false_cnvs.txt ${data_path}canoes/validated_canoes_false_cnvs.txt \
+    ${data_path}clamms/validated_clamms_false_cnvs.txt > ${data_path}validated_xhmm_canoes_clamms_false_cnvs.txt
