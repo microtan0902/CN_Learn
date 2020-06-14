@@ -47,7 +47,7 @@ cat  ${data_path}gsd_data/xhmm_calls_ped.cnv \
     |awk '{if ($22 == "Role" || $22 == "Offspring") print $0}' \
     > ${data_path}gsd_data/xhmm_calls_offspring.cnv
 
-# some of samples doesn't have pedigree info
+# some of samples don't have pedigree info
 cat xhmm_calls_ped.cnv|cut -f 22|sort|uniq
 
 # Genotyping for CNVs in offsprings
@@ -77,28 +77,30 @@ head -1 $input_file | awk '{for (i=1;i<=NF;i++) {if ($i=="NUM_TARG") {print i}}}
 cat ${data_path}xhmm_calls_offspring_trio_gt.cnv |awk '{if($8=="NUM_TARG" || $8 >= 3) {print $0}}' \
     > ${data_path}xhmm_calls_offspring_3targets.cnv
 
-# get de novo CNVs
+# Select Mendelian erros (de novo CNVs) as FALSE label. Offspring.SQ>=10 & parents.NQ>=60
+# 2020.6.13 updated.
 input_file=${data_path}xhmm_calls_offspring_3targets.cnv
 head -1 ${input_file} | awk '{for (i=1;i<=NF;i++) {if ($i=="Offspring_SQ") {print i}}}'
 head -1 ${input_file} | awk '{for (i=1;i<=NF;i++) {if ($i=="Father_NQ") {print i}}}'
 head -1 ${input_file} | awk '{for (i=1;i<=NF;i++) {if ($i=="Mother_NQ") {print i}}}'
 
 cat ${input_file} | grep -v "None" \
-    | awk -F '\t' '{if(($26=="Offspring_SQ"||$26>=60) && ($29=="Father_NQ"||$29>=60) \
+    | awk -F '\t' '{if(($26=="Offspring_SQ"||$26>=10) && ($29=="Father_NQ"||$29>=60) \
     &&($31=="Mother_NQ"||$31>=60)) print $0 }' \
     > ${data_path}xhmm_calls_offspring_denovo.cnv
 
 cat ${data_path}xhmm_calls_offspring_denovo.cnv|cut -f 1,2,3,26,28,29,30,31|less
 
-# inherited CNVs
+# Select inherited CNVs as TRUE label. Offspring.SQ>=60 & OneParent.SQ>=60 & OtherParent.NQ>=60
 head -1 ${input_file} | awk '{for (i=1;i<=NF;i++) {if ($i=="CNV") {print i}}}'
 head -1 ${input_file} | awk '{for (i=1;i<=NF;i++) {if ($i=="Offspring_SQ") {print i}}}'
 head -1 ${input_file} | awk '{for (i=1;i<=NF;i++) {if ($i=="Father_SQ") {print i}}}'
 head -1 ${input_file} | awk '{for (i=1;i<=NF;i++) {if ($i=="Mother_SQ") {print i}}}'
+
 cat ${input_file} |grep -v "None"| awk -F '\t' \
     '{if( ($26=="Offspring_SQ"||$26>=60) && \
     (($28=="Father_SQ"||$28>=60) && ($31=="Mother_NQ"||$31>=60) || \
-     ($30=="Mother_SQ"||$30>=60) && ($29=="Father_NQ"||$29>=60)) \
+    ($30=="Mother_SQ"||$30>=60) && ($29=="Father_NQ"||$29>=60)) \
     ) print $0}'>${data_path}xhmm_calls_offspring_inherited.cnv
 
 cat ${data_path}xhmm_calls_offspring_inherited.cnv|cut -f 1,2,3,26,28,29,30,31|less
@@ -136,10 +138,10 @@ head -1 $input_file | awk '{for (i=1;i<=NF;i++) {if ($i=="SD_region") {print i}}
 head -1 $input_file | awk '{for (i=1;i<=NF;i++) {if ($i=="Mappability") {print i}}}'
 head -1 $input_file | awk '{for (i=1;i<=NF;i++) {if ($i=="GC") {print i}}}'
 
-cat ${input_file}|awk -F '\t' '{if(($32=="SD_region"||$32=="-") && ($33=="Mappability"||$33>=0.75) && ($34=="GC"||($34>=30&&$34<=70))) print $0}' \
+cat ${input_file}|awk -F '\t' '{if(($32=="SD_region"||$32=="-") && ($33=="Mappability"||$33>=0.75) && ($34=="GC"||($34>=0.3&&$34<=0.7))) print $0}' \
     > ${data_path}xhmm_calls_offspring_denovo_final.cnv
 
-cat ${input_file}|awk -F '\t' '{if(($32=="SD_region"||$32!="-") || ($33=="Mappability"||$33<0.75) || ($34=="GC"||$34<30||$34>70)) print $0}' \
+cat ${input_file}|awk -F '\t' '{if(($32=="SD_region"||$32!="-") || ($33=="Mappability"||$33<0.75) || ($34=="GC"||$34<0.3||$34>0.7)) print $0}' \
     > ${data_path}xhmm_calls_offspring_denovo_final_Removed.cnv
 
 cat ${data_path}xhmm_calls_offspring_denovo_final.cnv|cut -f 3,2,1 > ${data_path}validation_xhmm_denovo.txt
@@ -167,7 +169,7 @@ cat ${data_path}validation_xhmm_inherited.txt|awk -F "\t|-|:" '{print $3"\t"$4"\
 # STEP 2.1: CANOES CNVs 
 ##############################################################################################
 data_path='/home/rt2776/CN_Learn/gsd_data/canoes/'
-
+cd ${data_path}
 ## Add reference
 cat ${data_path}canoes_calls_offspring_trio_gt_target3.cnv | awk '{print $0"\thg38"}' \
     >${data_path}canoes_calls_offspring_trio_gt_target3_hg38.cnv
@@ -186,8 +188,15 @@ cat ${data_path}canoes_calls_offspring_trio_gt_target3_inherited.tmp | awk -F '\
          $23!="NA" && $28!="NA") print $0}'\
     >${data_path}canoes_calls_offspring_trio_gt_target3_inherited.cnv 
 
-NQ_threshold=30
-cat ${data_path}canoes_calls_offspring_trio_gt_target3_inherited.tmp | awk -F '\t' \
+## Select Mendelian erros (de novo CNVs) as FALSE label. Offspring.SQ>=10 & parents.NQ>=60
+## 2020.6.13 updated.
+SQ_threshold=10
+cat ${data_path}canoes_calls_offspring_trio_gt_target3_hg38.cnv | \
+    awk -F '\t' '{if(($11=="Q_SOME"||$11>='${SQ_threshold}') && ($19!="0") && ($20!="0")) print $0}' \
+    > ${data_path}canoes_calls_offspring_trio_gt_target3_denovo.tmp
+
+NQ_threshold=70
+cat ${data_path}canoes_calls_offspring_trio_gt_target3_denovo.tmp | awk -F '\t' \
     '{if((($3 == "CNV" || $3 == "DEL") && ($23 == "Paternal_NQDel" || $23 >= '${NQ_threshold}') && ($28 == "Maternal_NQDel" || $28 >= '${NQ_threshold}') ||
         ($3 == "CNV" || $3 == "DUP") && ($25 == "Paternal_NQDup" || $25 >= '${NQ_threshold}') && ($30 == "Maternal_NQDup" || $30 >= '${NQ_threshold}')) &&
          $23!="NA" && $28!="NA") print $0}' >${data_path}canoes_calls_offspring_trio_gt_target3_denovo.cnv
@@ -203,6 +212,7 @@ cat ${data_path}canoes_calls_offspring_trio_w_gt_t3_inherited_sd.cnv|awk -F '\t'
 python /home/rt2776/cnv_analysis/scripts/5_annotation.py sd \
     --input ${data_path}canoes_calls_offspring_trio_gt_target3_denovo.cnv \
     --output ${data_path}canoes_calls_offspring_trio_gt_target3_denovo_sd.cnv
+cut -f33 ${data_path}canoes_calls_offspring_trio_gt_target3_denovo_sd.cnv|grep -w '-'|wc
 
 ## annotate mappability
 python /home/rt2776/cnv_analysis/scripts/5_annotation.py mappability \
@@ -240,10 +250,10 @@ head -1 $input_file | awk '{for (i=1;i<=NF;i++) {if ($i=="SD_region") {print i}}
 head -1 $input_file | awk '{for (i=1;i<=NF;i++) {if ($i=="Mappability") {print i}}}'
 head -1 $input_file | awk '{for (i=1;i<=NF;i++) {if ($i=="GC") {print i}}}'
 
-cat ${input_file}|awk -F '\t' '{if(($33=="SD_region"||$33=="-") && ($34=="Mappability"||$34>=0.75) && ($35=="GC"||($35>=30&&$35<=70))) print $0}' \
+cat ${input_file}|awk -F '\t' '{if(($33=="SD_region"||$33=="-") && ($34=="Mappability"||$34>=0.75) && ($35=="GC"||($35>=0.3&&$35<=0.7))) print $0}' \
     > ${data_path}canoes_calls_offspring_trio_denovo_final.cnv 
 
-cat ${input_file}|awk -F '\t' '{if(($33=="SD_region"||$33!="-") || ($34=="Mappability"||$34<0.75) || ($35=="GC"||$35<30||$35>70)) print $0}' \
+cat ${input_file}|awk -F '\t' '{if(($33=="SD_region"||$33!="-") || ($34=="Mappability"||$34<0.75) || ($35=="GC"||$35<0.3||$35>0.7)) print $0}' \
     > ${data_path}canoes_calls_offspring_trio_denovo_final_filtered.cnv 
 
 cat ${data_path}canoes_calls_offspring_trio_denovo_final.cnv|cut -f 4,3,2 > ${data_path}validation_canoes_denovo.txt

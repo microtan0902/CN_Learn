@@ -104,8 +104,8 @@ bash ${script_path}merge_overlapping_CNVs_readdepth_step34_generate_results_RT.s
 bash ${script_path}extract_gc_map_vals.sh
 
 ##Step 8 | Label CNVs based on gold-standard validations
-#goto
-cn_learn_validated_cnv_selection.sh
+#goto Renjie's script
+vim ${script_path}validated_cnv_selection_RT.sh
 
 # modify the file location and run
 python ${script_path}rt_lable_cnvs_step1_transfer_format.py
